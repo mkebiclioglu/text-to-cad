@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+cadquery
+openai
+anthropic
+python-multipart
