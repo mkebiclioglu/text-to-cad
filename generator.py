@@ -1,8 +1,12 @@
 import os
 import re
 
+from dotenv import load_dotenv
+
 from prompts import SYSTEM_PROMPT, EXAMPLES
 from validator import validate
+
+load_dotenv()
 
 MAX_RETRIES = 4
 

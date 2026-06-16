@@ -3,4 +3,5 @@ uvicorn[standard]
 cadquery
 openai
 anthropic
+python-dotenv
 python-multipart

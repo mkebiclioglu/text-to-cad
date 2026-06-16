@@ -28,34 +28,40 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Choose a backend
+### 2. Configure environment
+
+Copy the example file and edit it with your settings:
+
+```bash
+cp .env.example .env
+```
+
+`.env` is gitignored — your API key stays local. The file is auto-loaded at startup.
+
+### 3. Choose a backend
 
 #### Option A — Local inference (free, no API key)
 
-Install Ollama from [ollama.com](https://ollama.com), then pull the model:
+Leave `LLM_PROVIDER=ollama` in `.env`. Install Ollama from [ollama.com](https://ollama.com), pull the model, and run:
 
 ```bash
 ollama pull qwen2.5-coder:7b
-```
-
-Start Ollama, then run the server:
-
-```bash
 uvicorn app:app --reload
 ```
 
 #### Option B — Anthropic Claude (better quality, pay-per-use)
 
-Get an API key at [console.anthropic.com](https://console.anthropic.com), then:
+Get an API key at [console.anthropic.com](https://console.anthropic.com), then in `.env` set:
 
-```bash
-ANTHROPIC_API_KEY=your_key_here LLM_PROVIDER=anthropic uvicorn app:app --reload
+```
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your_key_here
 ```
 
-To use Sonnet instead of Opus (cheaper):
+(Optional) switch to Sonnet for cheaper runs by setting `ANTHROPIC_MODEL=claude-sonnet-4-6`. Then:
 
 ```bash
-ANTHROPIC_API_KEY=your_key_here LLM_PROVIDER=anthropic ANTHROPIC_MODEL=claude-sonnet-4-6 uvicorn app:app --reload
+uvicorn app:app --reload
 ```
 
 ---
