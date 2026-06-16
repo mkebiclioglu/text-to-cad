@@ -103,6 +103,46 @@ curl -X POST http://localhost:8000/generate \
 
 Saves a timestamped file like `part_20260607_143022.stl` in the current directory. The server also keeps a copy under `outputs/` in the repo (gitignored) so you can re-open recent prints without re-running.
 
+If the description implies multiple printable parts, `/generate` returns `422 — Use POST /generate-assembly instead`. Switch endpoints.
+
+### Generate a multi-part assembly
+
+Use `/generate-assembly` when the description implies more than one printable part (e.g. a hinge, a drone, a peg-and-socket joint). Each part is exported as its own STL under `outputs/`, and the response is a JSON manifest with per-part qty, print notes, and warnings.
+
+```bash
+curl -X POST http://localhost:8000/generate-assembly \
+  -H "Content-Type: application/json" \
+  -d '{"description": "A 10mm shaft 50mm long with a separate retaining collar (20mm OD, 6mm thick) that slides onto it"}'
+```
+
+Response shape:
+
+```json
+{
+  "code": "...full CadQuery script...",
+  "parts": [
+    {
+      "name": "shaft",
+      "path": "outputs/shaft_20260615_204500.stl",
+      "qty": 1,
+      "print_notes": "Print vertical for best concentricity",
+      "warnings": []
+    },
+    {
+      "name": "collar",
+      "path": "outputs/collar_20260615_204500.stl",
+      "qty": 1,
+      "print_notes": "Print flat on bed, bore facing up",
+      "warnings": []
+    }
+  ]
+}
+```
+
+Print each STL separately, then assemble physically.
+
+**Note:** Assemblies are realistically only usable with the Anthropic backend. The local 7b Ollama model struggles to reason about interface fits between parts.
+
 ### Multi-turn chat
 
 ```bash
@@ -135,10 +175,10 @@ curl http://localhost:8000/health
 ## Project structure
 
 ```
-app.py          — FastAPI server (POST /generate, POST /chat, GET /health)
+app.py          — FastAPI server (POST /generate, POST /generate-assembly, POST /chat, GET /health)
 generator.py    — LLM call + retry loop, provider switching
-validator.py    — 3-layer validation: exec sandbox, geometry, printability
-prompts.py      — System prompt + few-shot CadQuery examples
+validator.py    — 3-layer validation: exec sandbox, geometry, printability (single parts and assemblies)
+prompts.py      — System prompt + few-shot CadQuery examples (incl. assembly mode)
 requirements.txt
 ```
 
@@ -149,6 +189,8 @@ requirements.txt
 1. **Execution** — runs the generated code in a sandboxed Python env, catches syntax errors and CadQuery exceptions
 2. **Geometry** — checks the resulting shape is a valid solid with non-zero dimensions
 3. **Printability** — warns if minimum dimension is below 1.5mm or part exceeds 300mm
+
+For assemblies, geometry and printability checks run against each child part individually; warnings come back per part in the `/generate-assembly` response.
 
 ---
 

@@ -63,9 +63,10 @@ def _extract_code(text: str) -> str:
 def generate_cad(
     description: str,
     history: list[dict] | None = None,
-) -> tuple[str, object, list[str], list[dict]]:
+) -> tuple[str, object, list[str], dict[str, dict] | None, list[dict]]:
     """
-    Returns (code, cq_result, warnings, updated_history).
+    Returns (code, cq_result, warnings, parts_meta, updated_history).
+    parts_meta is None for single-part results and a dict per part for assemblies.
     Raises ValueError if all retries are exhausted.
     """
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -83,11 +84,11 @@ def generate_cad(
         messages.append({"role": "assistant", "content": assistant_text})
 
         code = _extract_code(assistant_text)
-        cq_result, error, warnings = validate(code)
+        cq_result, error, warnings, parts_meta = validate(code)
 
         if cq_result is not None:
             user_history = messages[len(EXAMPLES) + 1:]  # strip system + examples
-            return code, cq_result, warnings, user_history
+            return code, cq_result, warnings, parts_meta, user_history
 
         last_error = error
         if attempt < MAX_RETRIES - 1:
