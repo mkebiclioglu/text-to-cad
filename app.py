@@ -13,6 +13,11 @@ OUTPUTS_DIR = Path(__file__).parent / "outputs"
 app = FastAPI(title="text-to-cad")
 
 
+def _ascii_header(value: str) -> str:
+    # HTTP header values must be latin-1 encodable; strip anything else.
+    return value.encode("ascii", "replace").decode("ascii")
+
+
 class GenerateRequest(BaseModel):
     description: str
 
@@ -50,7 +55,7 @@ async def generate(req: GenerateRequest):
         path=str(output_path),
         media_type="model/stl",
         filename=filename,
-        headers={"X-Warnings": "; ".join(warnings)} if warnings else {},
+        headers={"X-Warnings": _ascii_header("; ".join(warnings))} if warnings else {},
     )
 
 
