@@ -11,7 +11,7 @@ Notes for Claude Code when working in this repo.
 ## Project shape
 
 - Small FastAPI service: `app.py` (routes), `generator.py` (LLM + retry loop), `validator.py` (sandbox + geometry + printability), `prompts.py` (system prompt + few-shot).
-- Two backends behind `LLM_PROVIDER`: `ollama` (local, default) or `anthropic` (cloud).
+- Two backends behind `LLM_PROVIDER`: `anthropic` (cloud, default) or `ollama` (local alternative).
 - Config comes from environment variables loaded from `.env` via `python-dotenv` (`load_dotenv()` in `generator.py`). `.env.example` is the committed template; real `.env` is gitignored.
 
 ## Conventions

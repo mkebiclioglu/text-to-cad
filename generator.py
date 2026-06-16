@@ -10,9 +10,9 @@ load_dotenv()
 
 MAX_RETRIES = 4
 
-PROVIDER = os.getenv("LLM_PROVIDER", "ollama")          # "ollama" or "anthropic"
+PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")       # "anthropic" or "ollama"
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-8")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-7")
 
 
 def _call_llm(messages: list[dict]) -> str:

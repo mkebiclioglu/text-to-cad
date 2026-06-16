@@ -2,7 +2,34 @@
 
 A natural language to 3D-printable CAD pipeline. Describe a functional part in plain English, get an STL file back in ~30 seconds.
 
-**Stack:** FastAPI · CadQuery · Ollama (local) or Anthropic Claude (cloud)
+**Stack:** FastAPI · CadQuery · Anthropic Claude (default) or Ollama (local alternative)
+
+---
+
+## Quickstart
+
+The default backend is Anthropic Claude. You need an API key from [console.anthropic.com](https://console.anthropic.com).
+
+```bash
+git clone <your-repo-url>
+cd text-to-cad
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# open .env and paste your key into ANTHROPIC_API_KEY=
+uvicorn app:app --reload
+```
+
+In another terminal, confirm it's running:
+
+```bash
+curl http://localhost:8000/health
+# {"status":"ok"}
+```
+
+Then jump to [Usage](#usage) to generate your first STL.
+
+Prefer running a local model with no API key? See [Alternative: local Ollama backend](#alternative-local-ollama-backend).
 
 ---
 
@@ -16,7 +43,7 @@ A natural language to 3D-printable CAD pipeline. Describe a functional part in p
 
 ---
 
-## Setup
+## Setup detail
 
 ### 1. Clone and create virtual environment
 
@@ -30,39 +57,36 @@ pip install -r requirements.txt
 
 ### 2. Configure environment
 
-Copy the example file and edit it with your settings:
-
 ```bash
 cp .env.example .env
 ```
 
-`.env` is gitignored — your API key stays local. The file is auto-loaded at startup.
+Open `.env` and paste your Anthropic API key into `ANTHROPIC_API_KEY=`. That's the only required change for the default setup. `.env` is gitignored — your key stays local. It's auto-loaded at startup.
 
-### 3. Choose a backend
+(Optional) switch to Sonnet for cheaper / faster runs by setting `ANTHROPIC_MODEL=claude-sonnet-4-6`.
 
-#### Option A — Local inference (free, no API key)
-
-Leave `LLM_PROVIDER=ollama` in `.env`. Install Ollama from [ollama.com](https://ollama.com), pull the model, and run:
-
-```bash
-ollama pull qwen2.5-coder:7b
-uvicorn app:app --reload
-```
-
-#### Option B — Anthropic Claude (better quality, pay-per-use)
-
-Get an API key at [console.anthropic.com](https://console.anthropic.com), then in `.env` set:
-
-```
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=your_key_here
-```
-
-(Optional) switch to Sonnet for cheaper runs by setting `ANTHROPIC_MODEL=claude-sonnet-4-6`. Then:
+### 3. Run the server
 
 ```bash
 uvicorn app:app --reload
 ```
+
+---
+
+## Alternative: local Ollama backend
+
+Run inference on your own machine — free, no API key, but lower quality and slower (especially for complex parts).
+
+1. Install Ollama from [ollama.com](https://ollama.com) and make sure it's running.
+2. Pull the model:
+   ```bash
+   ollama pull qwen2.5-coder:7b
+   ```
+3. In `.env`, set:
+   ```
+   LLM_PROVIDER=ollama
+   ```
+4. Run the server as usual: `uvicorn app:app --reload`.
 
 ---
 
@@ -101,10 +125,10 @@ curl http://localhost:8000/health
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `ollama` | `ollama` or `anthropic` |
-| `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Any model available in your Ollama install |
-| `ANTHROPIC_MODEL` | `claude-opus-4-8` | Any Anthropic model ID |
+| `LLM_PROVIDER` | `anthropic` | `anthropic` or `ollama` |
 | `ANTHROPIC_API_KEY` | — | Required when `LLM_PROVIDER=anthropic` |
+| `ANTHROPIC_MODEL` | `claude-opus-4-7` | Any Anthropic model ID (e.g. `claude-sonnet-4-6` for cheaper runs) |
+| `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Any model available in your Ollama install |
 
 ---
 
@@ -133,7 +157,7 @@ requirements.txt
 - Specify screw sizes explicitly: *"two M3 mounting holes"* (the model knows standard clearance diameters)
 - Give absolute dimensions in mm
 - For complex shapes, describe the geometry: *"L-shaped"*, *"cylindrical"*, *"split clamp"*
-- Use Anthropic backend for complex parts (enclosures, clips, multi-body geometry)
+- The default Anthropic backend handles complex parts (enclosures, clips, multi-body geometry) much more reliably than the local Ollama option
 
 ---
 
@@ -142,4 +166,4 @@ requirements.txt
 - No frontend — API only
 - Complex freeform geometry (curves, organic shapes) is unreliable
 - No persistence between sessions
-- Local 7b model struggles with multi-body boolean operations — use Anthropic backend for those
+- The local 7b Ollama model struggles with multi-body boolean operations — the default Anthropic backend handles these reliably
