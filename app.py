@@ -53,7 +53,10 @@ class AssemblyResponse(BaseModel):
     design_type: str
     iterations: int
     spec: dict
+    required_hardware: list[str]
+    assembly_instructions: list[str]
     critique: Critique | None
+    critique_history: list[Critique]
     parts: list[AssemblyPart]
 
 
@@ -121,12 +124,16 @@ async def generate_assembly(req: GenerateRequest):
         )
 
     critique = Critique(**result["critique"]) if result.get("critique") else None
+    critique_history = [Critique(**c) for c in result.get("critique_history", [])]
     return AssemblyResponse(
         summary=result["spec"]["summary"],
         design_type=result["design_type"],
         iterations=result["iterations"],
         spec=result["spec"],
+        required_hardware=result["spec"].get("required_hardware", []),
+        assembly_instructions=result["spec"].get("assembly_instructions", []),
         critique=critique,
+        critique_history=critique_history,
         parts=parts_payload,
     )
 

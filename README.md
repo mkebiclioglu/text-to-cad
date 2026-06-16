@@ -109,12 +109,28 @@ Response shape (abridged):
   "summary": "A two-part mechanical assembly...",
   "iterations": 0,
   "spec": { "design_type": "assembly", "global_dims": {...}, "parts": [...] },
+  "required_hardware": [
+    "M8 threaded rod, 120mm long",
+    "8mm steel rod (rail) x2, 140mm long each",
+    "M8 hex nut x1"
+  ],
+  "assembly_instructions": [
+    "Print all three parts in the orientations noted on each part.",
+    "Press the M8 hex nut into the hex pocket on the sliding_jaw until flush.",
+    "Slide the sliding_jaw onto the two 8mm guide rails.",
+    "Thread the M8 leadscrew through the base, through the captive nut in the sliding_jaw, and out the front face.",
+    "Snap the hand_crank_knob onto the back end of the leadscrew."
+  ],
   "critique": {
     "approve": true,
     "summary": "Bounding boxes match spec exactly...",
     "missed_requirements": [],
     "fixes": []
   },
+  "critique_history": [
+    { "approve": false, "summary": "First-pass had no captive nut pocket...", "missed_requirements": [...], "fixes": [...] },
+    { "approve": true,  "summary": "Revised design adds the nut pocket...",   "missed_requirements": [],     "fixes": [] }
+  ],
   "parts": [
     {
       "name": "shaft",
@@ -131,10 +147,13 @@ Response shape (abridged):
 ```
 
 - `iterations` — how many Designer→Critic outer-loop rounds fired. 0 means the first design was approved.
-- `critique` — the last Critic verdict. If `approve` is false, the response still contains the best-effort parts (after the outer loop hit its cap).
+- `critique` — the *final* Critic verdict. If `approve` is false, the response still contains the best-effort parts (after the outer loop hit its cap).
+- `critique_history` — every Critic verdict in order, including rejections that triggered revisions. Useful for understanding what the agents corrected mid-flight.
+- `required_hardware` — off-the-shelf items (rods, screws, nuts, bearings) needed to complete the build. 3D printers can't reliably produce these — buy them separately.
+- `assembly_instructions` — ordered build steps combining the printed parts and required hardware.
 - `spec` — the final Designer spec the parts were built from. Useful for understanding what the Designer inferred from your description.
 
-Print each STL separately, then assemble physically.
+Print each STL separately, gather the listed hardware, then follow `assembly_instructions`.
 
 ### Health check
 

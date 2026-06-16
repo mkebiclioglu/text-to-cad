@@ -33,7 +33,7 @@ def run(description: str) -> dict:
     parts_to_generate = [p["name"] for p in spec["parts"]]
 
     iterations = 0
-    last_critique = None
+    critique_history: list[dict] = []
 
     while True:
         for name in parts_to_generate:
@@ -61,14 +61,15 @@ def run(description: str) -> dict:
             break
 
         summaries = [parts_state[n]["summary"] for n in parts_state]
-        last_critique = critic.review(description, spec, summaries)
+        verdict = critic.review(description, spec, summaries)
+        critique_history.append(verdict)
 
-        if last_critique["approve"]:
+        if verdict["approve"]:
             break
 
         iterations += 1
 
-        spec = designer.design(description, critique=last_critique, prior_spec=spec)
+        spec = designer.design(description, critique=verdict, prior_spec=spec)
 
         # Reconcile state with the revised spec
         new_names = {p["name"] for p in spec["parts"]}
@@ -76,7 +77,7 @@ def run(description: str) -> dict:
             if stale not in new_names:
                 parts_state.pop(stale)
 
-        affected = {fix["part_name"] for fix in last_critique["fixes"] if fix["action"] != "remove"}
+        affected = {fix["part_name"] for fix in verdict["fixes"] if fix["action"] != "remove"}
         # Anything in the revised spec that we haven't built yet must be (re)generated
         for part_spec in spec["parts"]:
             if part_spec["name"] not in parts_state:
@@ -87,7 +88,8 @@ def run(description: str) -> dict:
         "design_type": spec["design_type"],
         "spec": spec,
         "parts": [parts_state[p["name"]] for p in spec["parts"] if p["name"] in parts_state],
-        "critique": last_critique,
+        "critique": critique_history[-1] if critique_history else None,
+        "critique_history": critique_history,
         "iterations": iterations,
     }
 

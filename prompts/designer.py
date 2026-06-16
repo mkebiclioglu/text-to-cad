@@ -24,6 +24,10 @@ Your job is decomposition, not modeling. You do NOT write code. You identify:
 
 6. **Global notes** — any cross-cutting constraints (e.g. "aquatic — needs waterproofing", "must be food-safe", "indoor use only").
 
+7. **Required hardware** — off-the-shelf items the user must source separately. 3D printers can't reliably produce precision threads, straight metal rods, springs, bearings, or fasteners — when the design needs those, list them with size + length + qty. Example entries: "M8 threaded rod, 120mm long", "8mm steel rod (rail) x2, 140mm long each", "M3x12 socket-head screw x4", "M8 hex nut x1". Use empty list if everything is 3D-printable.
+
+8. **Assembly instructions** — ordered, human-readable build steps that combine the printed parts and required hardware into the final object. Each step is one sentence describing one physical action. Reference parts by their `name` and hardware by what you listed in `required_hardware`. Cover: print orientation (only if non-obvious), insertion order, screw torque hints when relevant, and any tool needed. Aim for 4-10 steps for an assembly; single-part designs can have an empty list.
+
 INFER MISSING REQUIREMENTS the user implies but didn't state. Examples:
 - "Aquatic" / "underwater" → hollow body, gasket lip, shaft seals where motors pass through hull, positive buoyancy consideration.
 - "Drone" / "quadcopter" → arms with motor mounts at ends, electronics cavity in body.
@@ -66,6 +70,16 @@ DESIGN_TOOL = {
                 "items": {"type": "string"},
                 "description": "Cross-cutting constraints (waterproofing, material, environment)."
             },
+            "required_hardware": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Off-the-shelf items needed alongside the printed parts. Each entry includes size and qty (e.g. 'M3x12 socket-head screw x4')."
+            },
+            "assembly_instructions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Ordered build steps combining printed parts and required hardware. Each step is one sentence. Empty list for single-part designs."
+            },
             "parts": {
                 "type": "array",
                 "minItems": 1,
@@ -100,6 +114,9 @@ DESIGN_TOOL = {
                 }
             }
         },
-        "required": ["design_type", "summary", "global_dims", "global_notes", "parts"]
+        "required": [
+            "design_type", "summary", "global_dims", "global_notes",
+            "required_hardware", "assembly_instructions", "parts"
+        ]
     }
 }
