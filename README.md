@@ -101,7 +101,7 @@ curl -X POST http://localhost:8000/generate \
   -OJ
 ```
 
-Saves a timestamped file like `part_20260607_143022.stl` in the current directory.
+Saves a timestamped file like `part_20260607_143022.stl` in the current directory. The server also keeps a copy under `outputs/` in the repo (gitignored) so you can re-open recent prints without re-running.
 
 ### Multi-turn chat
 

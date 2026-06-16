@@ -1,6 +1,5 @@
-import os
-import tempfile
 from datetime import datetime
+from pathlib import Path
 
 import cadquery as cq
 from fastapi import FastAPI, HTTPException
@@ -8,6 +7,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from generator import generate_cad
+
+OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
 app = FastAPI(title="text-to-cad")
 
@@ -35,21 +36,22 @@ async def generate(req: GenerateRequest):
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"part_{timestamp}.stl"
+    output_path = OUTPUTS_DIR / filename
 
-    tmp = tempfile.NamedTemporaryFile(suffix=".stl", delete=False)
     try:
-        cq.exporters.export(cq_result, tmp.name)
-        return FileResponse(
-            path=tmp.name,
-            media_type="model/stl",
-            filename=filename,
-            headers={"X-Warnings": "; ".join(warnings)} if warnings else {},
-        )
+        cq.exporters.export(cq_result, str(output_path))
     except Exception as e:
-        os.unlink(tmp.name)
         raise HTTPException(status_code=500, detail=f"STL export failed: {e}")
+
+    return FileResponse(
+        path=str(output_path),
+        media_type="model/stl",
+        filename=filename,
+        headers={"X-Warnings": "; ".join(warnings)} if warnings else {},
+    )
 
 
 @app.post("/chat", response_model=ChatResponse)
