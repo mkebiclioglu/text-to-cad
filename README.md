@@ -1,14 +1,14 @@
 # text-to-cad
 
-A natural language to 3D-printable CAD pipeline. Describe a functional part in plain English, get an STL file back in ~30 seconds.
+A natural language to 3D-printable CAD pipeline. Describe a functional part in plain English, get an STL file back. Multi-part assemblies get reviewed by a Critic agent before being returned.
 
-**Stack:** FastAPI · CadQuery · Anthropic Claude (default) or Ollama (local alternative)
+**Stack:** FastAPI · CadQuery · Anthropic Claude · agent-based (Designer / Generator / Critic)
 
 ---
 
 ## Quickstart
 
-The default backend is Anthropic Claude. You need an API key from [console.anthropic.com](https://console.anthropic.com).
+You need an API key from [console.anthropic.com](https://console.anthropic.com).
 
 ```bash
 git clone <your-repo-url>
@@ -29,17 +29,16 @@ curl http://localhost:8000/health
 
 Then jump to [Usage](#usage) to generate your first STL.
 
-Prefer running a local model with no API key? See [Alternative: local Ollama backend](#alternative-local-ollama-backend).
-
 ---
 
 ## How it works
 
-1. You POST a plain-language description to `/generate`
-2. The LLM generates parametric CadQuery (Python) code
-3. The code runs in a sandbox — if it fails, the error is fed back to the LLM and it retries (up to 4 attempts)
-4. Three validation layers run: Python execution → geometry validity → printability checks
-5. A timestamped STL file is returned
+1. You POST a plain-language description to `/generate` or `/generate-assembly`.
+2. The **Designer** agent turns the description into a structured engineering spec (parts, shared dimensions, interfaces, qty).
+3. The **Generator** agent builds one part at a time, with an inner retry loop on validator errors (up to 4 attempts per part).
+4. Three validation layers run per part: Python execution → geometry validity → printability checks.
+5. For multi-part designs, the **Critic** agent compares the actual geometry (bounding boxes, triangle counts) to the spec and the original request. If it finds gaps, the Designer revises the spec and only affected parts are regenerated. Capped at 2 outer iterations.
+6. STLs are written to `outputs/` and either returned as a single download (`/generate`) or as a JSON manifest (`/generate-assembly`).
 
 ---
 
@@ -73,20 +72,7 @@ uvicorn app:app --reload
 
 ---
 
-## Alternative: local Ollama backend
-
-Run inference on your own machine — free, no API key, but lower quality and slower (especially for complex parts).
-
-1. Install Ollama from [ollama.com](https://ollama.com) and make sure it's running.
-2. Pull the model:
-   ```bash
-   ollama pull qwen2.5-coder:7b
-   ```
-3. In `.env`, set:
-   ```
-   LLM_PROVIDER=ollama
-   ```
-4. Run the server as usual: `uvicorn app:app --reload`.
+**Note:** the agentic architecture (Designer / Critic via forced tool use) requires reliable Anthropic-style tool calling. The previous Ollama fallback has been removed — local 7b models can't reliably produce the structured JSON the Designer and Critic need.
 
 ---
 
@@ -115,43 +101,40 @@ curl -X POST http://localhost:8000/generate-assembly \
   -d '{"description": "A 10mm shaft 50mm long with a separate retaining collar (20mm OD, 6mm thick) that slides onto it"}'
 ```
 
-Response shape:
+Response shape (abridged):
 
 ```json
 {
-  "code": "...full CadQuery script...",
+  "design_type": "assembly",
+  "summary": "A two-part mechanical assembly...",
+  "iterations": 0,
+  "spec": { "design_type": "assembly", "global_dims": {...}, "parts": [...] },
+  "critique": {
+    "approve": true,
+    "summary": "Bounding boxes match spec exactly...",
+    "missed_requirements": [],
+    "fixes": []
+  },
   "parts": [
     {
       "name": "shaft",
       "path": "outputs/shaft_20260615_204500.stl",
       "qty": 1,
       "print_notes": "Print vertical for best concentricity",
-      "warnings": []
-    },
-    {
-      "name": "collar",
-      "path": "outputs/collar_20260615_204500.stl",
-      "qty": 1,
-      "print_notes": "Print flat on bed, bore facing up",
-      "warnings": []
+      "bbox_mm": {"x": 10.0, "y": 10.0, "z": 50.0},
+      "size_bytes": 25084,
+      "warnings": [],
+      "code": "import cadquery as cq\nshaft_diameter = 10\n..."
     }
   ]
 }
 ```
 
+- `iterations` — how many Designer→Critic outer-loop rounds fired. 0 means the first design was approved.
+- `critique` — the last Critic verdict. If `approve` is false, the response still contains the best-effort parts (after the outer loop hit its cap).
+- `spec` — the final Designer spec the parts were built from. Useful for understanding what the Designer inferred from your description.
+
 Print each STL separately, then assemble physically.
-
-**Note:** Assemblies are realistically only usable with the Anthropic backend. The local 7b Ollama model struggles to reason about interface fits between parts.
-
-### Multi-turn chat
-
-```bash
-curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"description": "A drawer handle 120mm long, 25mm wide, 20mm tall with two M3 holes 80mm apart", "history": []}'
-```
-
-Returns JSON with `code`, `warnings`, and `history`. Pass `history` back on the next turn to continue the conversation.
 
 ### Health check
 
@@ -165,22 +148,56 @@ curl http://localhost:8000/health
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `anthropic` | `anthropic` or `ollama` |
-| `ANTHROPIC_API_KEY` | — | Required when `LLM_PROVIDER=anthropic` |
-| `ANTHROPIC_MODEL` | `claude-opus-4-7` | Any Anthropic model ID (e.g. `claude-sonnet-4-6` for cheaper runs) |
-| `OLLAMA_MODEL` | `qwen2.5-coder:7b` | Any model available in your Ollama install |
+| `ANTHROPIC_API_KEY` | — | Required. |
+| `ANTHROPIC_MODEL` | `claude-opus-4-7` | Any Anthropic model ID (e.g. `claude-sonnet-4-6` for cheaper runs). The same model is used by all three agents. |
 
 ---
 
 ## Project structure
 
 ```
-app.py          — FastAPI server (POST /generate, POST /generate-assembly, POST /chat, GET /health)
-generator.py    — LLM call + retry loop, provider switching
-validator.py    — 3-layer validation: exec sandbox, geometry, printability (single parts and assemblies)
-prompts.py      — System prompt + few-shot CadQuery examples (incl. assembly mode)
+app.py                  — FastAPI server (POST /generate, POST /generate-assembly, GET /health)
+
+agents/                 — LLM-driven roles, one prompt per agent
+  _client.py            — shared Anthropic client (call_text + call_structured)
+  designer.py           — vague request → structured engineering spec (forced JSON)
+  generator.py          — one part spec → validated CadQuery shape (inner retry loop)
+  critic.py             — spec + actual geometry → approve/revise (forced JSON)
+  orchestrator.py       — drives Designer → Generator (per part) → Critic loops
+
+tools/                  — deterministic Python tools used by agents
+  validate.py           — exec sandbox + geometry + printability for one part
+  export.py             — STL writer; returns path + bbox + size
+
+prompts/                — role-specific system prompts and tool schemas
+  designer.py           — design rules + define_design tool schema
+  generator.py          — CadQuery rules + few-shot single-part examples
+  critic.py             — review heuristics + review_design tool schema
+
 requirements.txt
 ```
+
+---
+
+## Agent architecture
+
+Generation runs through four LLM-or-Python steps with **two feedback loops**:
+
+```
+description ──► Designer ──► [for each part] Generator ──► Critic ──► approve?
+                  ▲              │     ▲                     │
+                  │              ▼     │ (inner loop:        │
+                  │           validate │  retry on error)    │
+                  │              │     │                     │
+                  └──────────────┴─────┴─────────────────────┘
+                       outer loop: revised spec → regen affected parts
+                              (max 2 iterations)
+```
+
+- **Designer** — turns a vague description into a structured spec: part list, shared/interface dimensions, qty, print notes. Output forced to JSON via Anthropic tool use. Infers missing engineering requirements ("aquatic" → hollow body, gasket lip, shaft seals).
+- **Generator** — given *one* part's spec + the global shared dimensions, writes CadQuery for just that part. Smaller context = less hallucination, less likely to skip details. **Inner loop:** validator errors are fed back as a retry prompt (up to 4 attempts per part).
+- **Critic** — given the original user request + spec + per-part bounding boxes + triangle counts, identifies missed requirements (e.g. "body has only 12 triangles, must be solid not hollow"). Output forced to JSON.
+- **Orchestrator** — drives the flow. **Outer loop:** Critic findings flow back into the Designer for a revised spec; only affected parts are regenerated. Capped at 2 outer iterations. Single-part designs skip the Critic.
 
 ---
 
@@ -190,7 +207,7 @@ requirements.txt
 2. **Geometry** — checks the resulting shape is a valid solid with non-zero dimensions
 3. **Printability** — warns if minimum dimension is below 1.5mm or part exceeds 300mm
 
-For assemblies, geometry and printability checks run against each child part individually; warnings come back per part in the `/generate-assembly` response.
+Each part goes through these checks independently inside the Generator's inner loop. The Critic then sees bounding boxes and triangle counts to do a higher-level design review.
 
 ---
 

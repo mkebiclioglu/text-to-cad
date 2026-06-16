@@ -1,12 +1,13 @@
 from datetime import datetime
 from pathlib import Path
 
-import cadquery as cq
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from generator import generate_cad
+from agents import orchestrator
+from agents.generator import GeneratorError
+from tools.export import export_stl
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
@@ -22,114 +23,112 @@ class GenerateRequest(BaseModel):
     description: str
 
 
-class ChatRequest(BaseModel):
-    description: str
-    history: list[dict] = []
-
-
-class ChatResponse(BaseModel):
-    code: str
-    warnings: list[str]
-    history: list[dict]
-
-
 class AssemblyPart(BaseModel):
     name: str
     path: str
     qty: int
     print_notes: str
+    bbox_mm: dict
+    size_bytes: int
     warnings: list[str]
+    code: str
+
+
+class CritiqueFix(BaseModel):
+    part_name: str
+    action: str
+    issue: str
+    instruction: str
+
+
+class Critique(BaseModel):
+    approve: bool
+    summary: str
+    missed_requirements: list[str]
+    fixes: list[CritiqueFix]
 
 
 class AssemblyResponse(BaseModel):
-    code: str
+    summary: str
+    design_type: str
+    iterations: int
+    spec: dict
+    critique: Critique | None
     parts: list[AssemblyPart]
 
 
 @app.post("/generate")
 async def generate(req: GenerateRequest):
-    """Single-shot: description → STL file download. For multi-part requests, use /generate-assembly."""
+    """Single-part designs only — returns STL download. Multi-part requests get 422."""
     try:
-        code, cq_result, warnings, parts_meta, _ = generate_cad(req.description)
-    except ValueError as e:
+        result = orchestrator.run(req.description)
+    except GeneratorError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=f"Agent failure: {e}")
 
-    if parts_meta is not None:
+    if result["design_type"] != "single":
         raise HTTPException(
             status_code=422,
             detail="Request produced a multi-part assembly. Use POST /generate-assembly instead.",
         )
 
-    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    part = result["parts"][0]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"part_{timestamp}.stl"
-    output_path = OUTPUTS_DIR / filename
+    info = export_stl(part["shape"], OUTPUTS_DIR, f"{part['spec']['name']}_{timestamp}")
 
-    try:
-        cq.exporters.export(cq_result, str(output_path))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"STL export failed: {e}")
-
+    warnings = part["warnings"]
     return FileResponse(
-        path=str(output_path),
+        path=info["path"],
         media_type="model/stl",
-        filename=filename,
+        filename=info["filename"],
         headers={"X-Warnings": _ascii_header("; ".join(warnings))} if warnings else {},
     )
 
 
 @app.post("/generate-assembly", response_model=AssemblyResponse)
 async def generate_assembly(req: GenerateRequest):
-    """Multi-part: description → set of STLs in outputs/ + JSON manifest."""
+    """Multi-part: orchestrated Designer/Generator/Critic flow. Returns JSON manifest + per-part STLs in outputs/."""
     try:
-        code, cq_result, _, parts_meta, _ = generate_cad(req.description)
-    except ValueError as e:
+        result = orchestrator.run(req.description)
+    except GeneratorError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=f"Agent failure: {e}")
 
-    if parts_meta is None:
+    if result["design_type"] == "single":
         raise HTTPException(
             status_code=422,
             detail="Request produced a single part, not an assembly. Use POST /generate instead.",
         )
 
-    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    parts: list[AssemblyPart] = []
-    for idx, child in enumerate(cq_result.children):
-        name = child.name or f"part_{idx}"
-        filename = f"{name}_{timestamp}.stl"
-        output_path = OUTPUTS_DIR / filename
-        try:
-            cq.exporters.export(child.obj, str(output_path))
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"STL export failed for {name}: {e}")
-
-        meta = parts_meta.get(name, {})
-        parts.append(
+    parts_payload: list[AssemblyPart] = []
+    for part in result["parts"]:
+        name = part["spec"]["name"]
+        info = export_stl(part["shape"], OUTPUTS_DIR, f"{name}_{timestamp}")
+        parts_payload.append(
             AssemblyPart(
                 name=name,
-                path=f"outputs/{filename}",
-                qty=int(meta.get("qty", 1)),
-                print_notes=str(meta.get("print_notes", "")),
-                warnings=list(meta.get("warnings", [])),
+                path=f"outputs/{info['filename']}",
+                qty=part["spec"]["qty"],
+                print_notes=part["spec"]["print_notes"],
+                bbox_mm=info["bbox_mm"],
+                size_bytes=info["size_bytes"],
+                warnings=part["warnings"],
+                code=part["code"],
             )
         )
 
-    return AssemblyResponse(code=code, parts=parts)
-
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    """Multi-turn: returns code + warnings + updated history for the next turn."""
-    try:
-        code, _, warnings, _, updated_history = generate_cad(
-            req.description, history=req.history or None
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-
-    return ChatResponse(code=code, warnings=warnings, history=updated_history)
+    critique = Critique(**result["critique"]) if result.get("critique") else None
+    return AssemblyResponse(
+        summary=result["spec"]["summary"],
+        design_type=result["design_type"],
+        iterations=result["iterations"],
+        spec=result["spec"],
+        critique=critique,
+        parts=parts_payload,
+    )
 
 
 @app.get("/health")
