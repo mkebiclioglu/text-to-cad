@@ -41,7 +41,7 @@ def _call_anthropic(messages: list[dict]) -> str:
 
     response = client.messages.create(
         model=ANTHROPIC_MODEL,
-        max_tokens=4096,
+        max_tokens=16000,
         thinking={"type": "adaptive"},
         system=system,
         messages=user_messages,
@@ -50,7 +50,13 @@ def _call_anthropic(messages: list[dict]) -> str:
     for block in response.content:
         if block.type == "text":
             return block.text
-    return response.content[-1].text
+
+    raise ValueError(
+        f"Anthropic response contained no text block "
+        f"(stop_reason={response.stop_reason}). "
+        "The model likely ran out of tokens during thinking — "
+        "try a simpler prompt or raise max_tokens."
+    )
 
 
 def _extract_code(text: str) -> str:
