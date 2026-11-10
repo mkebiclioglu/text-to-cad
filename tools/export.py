@@ -1,5 +1,6 @@
 """STL export for validated shapes."""
 
+import re
 from pathlib import Path
 
 import cadquery as cq
@@ -12,6 +13,8 @@ def export_stl(shape, output_dir: Path, name: str) -> dict:
     the design without reading the binary STL.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    # `name` comes from the Designer's (LLM) spec: keep it a plain filename inside output_dir
+    name = re.sub(r"[^A-Za-z0-9_-]+", "_", name).strip("_") or "part"
     path = output_dir / f"{name}.stl"
 
     cq.exporters.export(shape, str(path))
