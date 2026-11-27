@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-7")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5")
 MAX_TOKENS = 16000
 
 

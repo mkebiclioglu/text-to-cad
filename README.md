@@ -11,7 +11,7 @@ A natural language to 3D-printable CAD pipeline. Describe a functional part in p
 You need an API key from [console.anthropic.com](https://console.anthropic.com).
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/mkebiclioglu/text-to-cad.git
 cd text-to-cad
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -47,7 +47,7 @@ Then jump to [Usage](#usage) to generate your first STL.
 ### 1. Clone and create virtual environment
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/mkebiclioglu/text-to-cad.git
 cd text-to-cad
 python3 -m venv .venv
 source .venv/bin/activate
@@ -62,7 +62,7 @@ cp .env.example .env
 
 Open `.env` and paste your Anthropic API key into `ANTHROPIC_API_KEY=`. That's the only required change for the default setup. `.env` is gitignored — your key stays local. It's auto-loaded at startup.
 
-(Optional) switch to Sonnet for cheaper / faster runs by setting `ANTHROPIC_MODEL=claude-sonnet-4-6`.
+(Optional) switch to Sonnet for cheaper / faster runs by setting `ANTHROPIC_MODEL=claude-sonnet-5-5`.
 
 ### 3. Run the server
 
@@ -168,7 +168,7 @@ curl http://localhost:8000/health
 | Variable | Default | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Required. |
-| `ANTHROPIC_MODEL` | `claude-opus-4-7` | Any Anthropic model ID (e.g. `claude-sonnet-4-6` for cheaper runs). The same model is used by all three agents. |
+| `ANTHROPIC_MODEL` | `claude-opus-5-5` | Any Anthropic model ID (e.g. `claude-sonnet-5-5` for cheaper runs). The same model is used by all three agents. |
 
 ---
 
